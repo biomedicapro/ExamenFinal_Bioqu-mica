@@ -336,14 +336,24 @@
             const feedbackDiv = document.createElement('div');
             feedbackDiv.classList.add('feedback');
             if (esCorrecta) {
-                feedbackDiv.textContent = `Correcto. Explicación: ${preguntaObj.explicacion}`;
-            } else {
-                if (tiempoAgotado) {
-                    feedbackDiv.textContent = `Tiempo agotado. Explicación: ${preguntaObj.explicacion}`;
-                } else {
-                    feedbackDiv.textContent = `Incorrecto. Explicación: ${preguntaObj.explicacion}`;
-                }
-            }
+    feedbackDiv.textContent = `✅ Correcto. Explicación: ${preguntaObj.explicacion}`;
+} else {
+    const letraCorrecta = preguntaObj.correcta;
+    let textoCorrecto = '';
+    switch (letraCorrecta) {
+        case 'A': textoCorrecto = preguntaObj.opcionA; break;
+        case 'B': textoCorrecto = preguntaObj.opcionB; break;
+        case 'C': textoCorrecto = preguntaObj.opcionC; break;
+        case 'D': textoCorrecto = preguntaObj.opcionD; break;
+    }
+
+    if (tiempoAgotado) {
+        feedbackDiv.textContent = `⏰ Tiempo agotado. La respuesta correcta era ${letraCorrecta}. ${textoCorrecto}. Explicación: ${preguntaObj.explicacion}`;
+    } else {
+        feedbackDiv.textContent = `❌ Incorrecto. La respuesta correcta era ${letraCorrecta}. ${textoCorrecto}. Explicación: ${preguntaObj.explicacion}`;
+    }
+}
+
             questionContainer.appendChild(feedbackDiv);
 
             // Guardar estado antes de avanzar
