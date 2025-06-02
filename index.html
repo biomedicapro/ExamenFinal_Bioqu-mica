@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examen Interactivo</title>
+    <!-- Roboto Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <!-- SheetJS para leer Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Estilos generales */
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #quiz-container {
+            background: #ffffff;
+            width: 90%;
+            max-width: 700px;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333333;
+        }
+        /* Sección de configuración inicial */
+        #setup {
+            text-align: center;
+        }
+        #setup p {
+            font-size: 16px;
+            color: #333333;
+        }
+        #setup input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            font-size: 16px;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            margin-left: 8px;
+            margin-right: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #007bff;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #aaaaaa;
+            cursor: not-allowed;
+        }
+        /* Panel de progreso y temporizador */
+        #progress {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        #question-number {
+            font-weight: bold;
+            color: #333333;
+        }
+        #timer {
+            font-weight: bold;
+            color: #e63946;
+        }
+        /* Pregunta */
+        #question {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333333;
+        }
+        /* Opciones */
+        .options {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 15px;
+        }
+        .options li {
+            margin: 8px 0;
+        }
+        .options label {
+            cursor: pointer;
+            font-size: 16px;
+            color: #333333;
+        }
+        .options input[type="radio"] {
+            margin-right: 8px;
+        }
+        /* Retroalimentación */
+        .feedback {
+            margin-top: 15px;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+        /* Ocultar elementos */
+        .hidden {
+            display: none;
+        }
+        /* Resultado final */
+        #score-container {
+            text-align: center;
+            padding: 20px;
+        }
+        #score-container div {
+            margin-top: 10px;
+        }
+        #score {
+            font-size: 48px;
+            font-weight: bold;
+            color: #2a9d8f;
+        }
+        #message {
+            font-size: 20px;
+            margin-top: 10px;
+            color: #264653;
+        }
+
+        /* Estilo responsivo */
+        @media (max-width: 480px) {
+            #quiz-container {
+                padding: 15px 20px;
+            }
+            button {
+                width: 100%;
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="quiz-container">
+        <h1>Examen Interactivo</h1>
+
+        <!-- Sección de configuración inicial -->
+        <div id="setup">
+            <p>Cargando preguntas...</p>
+        </div>
+
+        <!-- Contenedor del examen -->
+        <div id="quiz" class="hidden">
+            <!-- Panel de progreso y temporizador -->
+            <div id="progress">
+                <div id="question-number"></div>
+                <div id="timer">Tiempo: <span id="time">60</span>s</div>
+            </div>
+            <!-- Texto de la pregunta -->
+            <div id="question"></div>
+            <!-- Opciones A, B, C, D -->
+            <ul class="options">
+                <li>
+                    <label>
+                        <input type="radio" name="option" value="A">
+                        <span id="labelA"></span>
+                    </label>
+                </li>
+                <li>
+                    <label>
+                        <input type="radio" name="option" value="B">
+                        <span id="labelB"></span>
+                    </label>
+                </li>
+                <li>
+                    <label>
+                        <input type="radio" name="option" value="C">
+                        <span id="labelC"></span>
+                    </label>
+                </li>
+                <li>
+                    <label>
+                        <input type="radio" name="option" value="D">
+                        <span id="labelD"></span>
+                    </label>
+                </li>
+            </ul>
+            <!-- Botón para enviar respuesta -->
+            <button id="submit-btn">Enviar</button>
+            <!-- Retroalimentación -->
+            <div id="feedback" class="feedback hidden"></div>
+        </div>
+
+        <!-- Contenedor del resultado final -->
+        <div id="score-container" class="hidden">
+            <div>Tu puntuación:</div>
+            <div id="score"></div>
+            <div id="message"></div>
+        </div>
+    </div>
+
+    <script>
+        /****************************
+         * Variables globales
+         ****************************/
+        let questionsData = [];     // Arreglo con todas las preguntas cargadas desde el Excel
+        let quizQuestions = [];     // Subconjunto de preguntas para la sesión actual
+        let currentIndex = 0;       // Índice de la pregunta actual (0-based)
+        let score = 0;              // Conteo de aciertos
+        let timerInterval = null;   // Referencia al intervalo del temporizador
+        let timeLeft = 60;          // Segundos restantes para la pregunta actual
+
+        /****************************
+         * Función: Cargar y parsear el archivo Excel
+         ****************************/
+        function loadExcel() {
+            // Se asume que "Examen.xlsm" está en la misma carpeta que este HTML y que se sirve vía HTTP/HTTPS
+            fetch('Examen.xlsm')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('No se pudo cargar el archivo Excel. Asegúrese de servir este HTML desde un servidor local o remoto.');
+                    }
+                    return response.arrayBuffer();
+                })
+                .then(arrayBuffer => {
+                    // Parsear el contenido binario con SheetJS
+                    const data = new Uint8Array(arrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    // Se toma la primera hoja
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    // Convertir la hoja a un arreglo de arreglos (header:1)
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    // La primera fila (índice 0) es el encabezado; las siguientes son las preguntas
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        // Verificar que existan al menos 7 columnas
+                        if (row.length >= 7) {
+                            questionsData.push({
+                                optionA: row[0] !== undefined ? String(row[0]) : '',
+                                optionB: row[1] !== undefined ? String(row[1]) : '',
+                                optionC: row[2] !== undefined ? String(row[2]) : '',
+                                optionD: row[3] !== undefined ? String(row[3]) : '',
+                                correct: row[4] !== undefined ? String(row[4]).trim().toUpperCase() : '',
+                                question: row[5] !== undefined ? String(row[5]) : '',
+                                explanation: row[6] !== undefined ? String(row[6]) : ''
+                            });
+                        }
+                    }
+
+                    // Una vez cargadas todas las preguntas, mostrar la sección de configuración inicial
+                    showSetup();
+                })
+                .catch(error => {
+                    // En caso de error (por ejemplo, no se sirve desde un servidor), mostrar mensaje
+                    const setupDiv = document.getElementById('setup');
+                    setupDiv.innerHTML = `<p style="color: #e63946;">
+                        Error al cargar las preguntas:<br>${error.message}<br><br>
+                        Asegúrese de ejecutar este archivo HTML desde un servidor HTTP/HTTPS local o remoto 
+                        (no directamente con file://). Por ejemplo, puede usar Live Server o un servidor estático sencillo.
+                    </p>`;
+                });
+        }
+
+        /****************************
+         * Función: Mostrar configuración inicial (selección del número de preguntas)
+         ****************************/
+        function showSetup() {
+            const setupDiv = document.getElementById('setup');
+            setupDiv.innerHTML = `
+                <p>¿Cuántas preguntas desea hacer en esta sesión? (Máximo ${questionsData.length})</p>
+                <input type="number" id="num-questions" min="1" max="${questionsData.length}" value="10">
+                <button id="start-btn">Iniciar Examen</button>
+            `;
+            document.getElementById('start-btn').addEventListener('click', startQuiz);
+        }
+
+        /****************************
+         * Función: Iniciar el examen tras indicar cuántas preguntas
+         ****************************/
+        function startQuiz() {
+            const inputNum = document.getElementById('num-questions');
+            const num = parseInt(inputNum.value, 10);
+
+            // Validar número
+            if (isNaN(num) || num < 1 || num > questionsData.length) {
+                alert('Ingrese un número válido de preguntas (entre 1 y ' + questionsData.length + ').');
+                return;
+            }
+
+            // Seleccionar las primeras "num" preguntas en el orden original
+            quizQuestions = questionsData.slice(0, num);
+
+            // Ocultar sección de configuración y mostrar el contenedor del examen
+            document.getElementById('setup').classList.add('hidden');
+            document.getElementById('quiz').classList.remove('hidden');
+
+            // Inicializar variables
+            currentIndex = 0;
+            score = 0;
+
+            // Mostrar la primera pregunta
+            showQuestion();
+        }
+
+        /****************************
+         * Función: Mostrar la pregunta actual
+         ****************************/
+        function showQuestion() {
+            // Ocultar retroalimentación previa (si existía)
+            const feedbackDiv = document.getElementById('feedback');
+            feedbackDiv.classList.add('hidden');
+            feedbackDiv.innerHTML = '';
+
+            // Habilitar botón de enviar
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = false;
+
+            // Obtener objeto de pregunta actual
+            const qObj = quizQuestions[currentIndex];
+
+            // Actualizar panel de progreso
+            document.getElementById('question-number').textContent =
+                `Pregunta ${currentIndex + 1} de ${quizQuestions.length}`;
+
+            // Mostrar texto de la pregunta
+            document.getElementById('question').textContent = qObj.question;
+
+            // Rellenar etiquetas de las opciones
+            document.getElementById('labelA').textContent = qObj.optionA;
+            document.getElementById('labelB').textContent = qObj.optionB;
+            document.getElementById('labelC').textContent = qObj.optionC;
+            document.getElementById('labelD').textContent = qObj.optionD;
+
+            // Limpiar radio buttons
+            const radios = document.getElementsByName('option');
+            radios.forEach(r => r.checked = false);
+
+            // Reiniciar temporizador
+            timeLeft = 60;
+            document.getElementById('time').textContent = timeLeft;
+
+            // Si existía un intervalo anterior, limpiarlo
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            // Iniciar cuenta regresiva de 1 segundo
+            timerInterval = setInterval(countdown, 1000);
+
+            // Asociar evento al botón Enviar
+            submitBtn.onclick = () => submitAnswer(false);
+        }
+
+        /****************************
+         * Función: Cuenta regresiva del temporizador
+         ****************************/
+        function countdown() {
+            timeLeft--;
+            document.getElementById('time').textContent = timeLeft;
+
+            if (timeLeft <= 0) {
+                // Si el tiempo llega a cero, se envía automáticamente como incorrecta
+                clearInterval(timerInterval);
+                submitAnswer(true);
+            }
+        }
+
+        /****************************
+         * Función: Procesar la respuesta (o timeout)
+         * @param {boolean} timeout - Si es true, indicar que fue por tiempo agotado
+         ****************************/
+        function submitAnswer(timeout = false) {
+            // Desactivar temporizador
+            clearInterval(timerInterval);
+
+            // Deshabilitar botón Enviar para evitar múltiples clicks
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+
+            // Obtener objeto de pregunta actual
+            const qObj = quizQuestions[currentIndex];
+
+            // Determinar opción seleccionada (si no fue timeout)
+            let selected = null;
+            if (!timeout) {
+                const radios = document.getElementsByName('option');
+                radios.forEach(r => { if (r.checked) selected = r.value; });
+            }
+
+            // Verificar si la respuesta es correcta
+            const isCorrect = !timeout && selected === qObj.correct;
+
+            // Contar acierto si es correcto
+            if (isCorrect) {
+                score++;
+            }
+
+            // Mostrar retroalimentación
+            const feedbackDiv = document.getElementById('feedback');
+            feedbackDiv.classList.remove('hidden');
+            if (isCorrect) {
+                feedbackDiv.innerHTML = `<span style="color: #2a9d8f; font-weight: bold;">
+                    Correcto.</span> ${qObj.explanation}`;
+            } else if (timeout) {
+                feedbackDiv.innerHTML = `<span style="color: #e63946; font-weight: bold;">
+                    Tiempo agotado.</span> ${qObj.explanation}`;
+            } else {
+                feedbackDiv.innerHTML = `<span style="color: #e63946; font-weight: bold;">
+                    Incorrecto.</span> ${qObj.explanation}`;
+            }
+
+            // Botón para continuar a la siguiente pregunta o ver resultado
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = (currentIndex + 1 < quizQuestions.length) ? 'Siguiente' : 'Ver Resultado';
+            nextBtn.style.marginTop = '12px';
+            nextBtn.onclick = () => {
+                currentIndex++;
+                if (currentIndex < quizQuestions.length) {
+                    showQuestion();
+                } else {
+                    showScore();
+                }
+            };
+            feedbackDiv.appendChild(nextBtn);
+        }
+
+        /****************************
+         * Función: Mostrar el resultado final
+         ****************************/
+        function showScore() {
+            // Ocultar contenedor del examen
+            document.getElementById('quiz').classList.add('hidden');
+            // Mostrar contenedor de resultado
+            const scoreContainer = document.getElementById('score-container');
+            scoreContainer.classList.remove('hidden');
+
+            // Calcular porcentaje de aciertos
+            const porcentaje = Math.round((score / quizQuestions.length) * 100);
+            document.getElementById('score').textContent = `${porcentaje}`;
+
+            // Mensaje de rendimiento basado en el rango
+            let mensaje = '';
+            if (porcentaje >= 90) {
+                mensaje = '¡Excelente desempeño!';
+            } else if (porcentaje >= 70) {
+                mensaje = 'Buen trabajo.';
+            } else if (porcentaje >= 50) {
+                mensaje = 'Regular, puedes mejorar.';
+            } else {
+                mensaje = 'Necesita mejorar.';
+            }
+            document.getElementById('message').textContent = mensaje;
+        }
+
+        /****************************
+         * Al cargar la página, iniciar la carga del Excel
+         ****************************/
+        window.addEventListener('load', loadExcel);
+    </script>
+</body>
+</html>
